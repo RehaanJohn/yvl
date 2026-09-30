@@ -237,3 +237,305 @@ html, body {
     display: none;
   }
 }
+
+/* ── Risk Gauge Panel ────────────────────────────────── */
+.risk-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.risk-panel-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.risk-panel-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.92);
+  letter-spacing: -0.01em;
+}
+
+.risk-panel-sub {
+  font-size: 0.75rem;
+  color: rgba(160, 180, 255, 0.5);
+  letter-spacing: 0.04em;
+}
+
+.risk-cards-row {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+/* ── Individual risk card ────────────────────────────── */
+.risk-card {
+  flex: 1;
+  min-width: 200px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 1.25rem;
+  backdrop-filter: blur(16px);
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  transition: border-color 0.3s ease;
+}
+
+.risk-card:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.risk-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.risk-asset-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.65rem;
+  border-radius: 100px;
+  border: 1px solid;
+}
+
+.risk-asset-ticker {
+  font-family: 'Syne', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.risk-asset-name {
+  font-size: 0.72rem;
+  color: rgba(210, 218, 255, 0.45);
+}
+
+/* ── Arc gauge ───────────────────────────────────────── */
+.risk-gauge-wrap {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  height: 84px;
+}
+
+.risk-gauge-center {
+  position: absolute;
+  bottom: 2px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+
+.risk-vol-value {
+  font-family: 'Syne', sans-serif;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.risk-vol-label {
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.risk-loading-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  animation: pulse-dot 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 0.2; transform: scale(1); }
+  50%       { opacity: 1;   transform: scale(1.3); }
+}
+
+/* ── Band pips ───────────────────────────────────────── */
+.risk-band-row {
+  display: flex;
+  justify-content: center;
+  gap: 1.2rem;
+}
+
+.risk-band-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.risk-band-label {
+  font-size: 0.58rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transition: color 0.4s ease;
+}
+
+/* ── Stat row ────────────────────────────────────────── */
+.risk-stat-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.risk-stat {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 0.55rem 0.65rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.risk-stat-label {
+  font-size: 0.58rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.risk-stat-value {
+  font-family: 'Syne', sans-serif;
+  font-size: 1rem;
+  font-weight: 700;
+  transition: color 0.4s ease;
+}
+
+/* ── Vol spike buttons ───────────────────────────────── */
+.spike-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 16px;
+  padding: 1rem 1.1rem;
+}
+
+.spike-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.spike-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.75);
+  letter-spacing: 0.01em;
+}
+
+.spike-sub {
+  font-size: 0.62rem;
+  color: rgba(160, 180, 255, 0.4);
+}
+
+.spike-buttons-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.spike-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.4rem 0.85rem;
+  border-radius: 100px;
+  border: 1px solid;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+  min-width: 52px;
+}
+
+.spike-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  opacity: 0.85;
+}
+
+.spike-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.spike-btn-crash {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+}
+
+.spike-btn-crash:hover:not(:disabled) {
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.25);
+}
+
+.spike-btn-reset {
+  background: rgba(99, 102, 241, 0.12);
+  border-color: rgba(99, 102, 241, 0.3);
+  color: #a5b4fc;
+}
+
+.spike-btn-reset:hover:not(:disabled) {
+  box-shadow: 0 0 14px rgba(99, 102, 241, 0.25);
+}
+
+.spike-btn-pending {
+  pointer-events: none;
+}
+
+.spike-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255,255,255,0.2);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.spike-feedback {
+  font-size: 0.68rem;
+  line-height: 1.4;
+  padding: 0.4rem 0.6rem;
+  border-radius: 8px;
+  animation: fade-in 0.2s ease;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.spike-feedback-ok {
+  background: rgba(34, 197, 94, 0.08);
+  color: #86efac;
+  border: 1px solid rgba(34, 197, 94, 0.15);
+}
+
+.spike-feedback-err {
+  background: rgba(239, 68, 68, 0.08);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.15);
+}

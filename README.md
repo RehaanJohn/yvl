@@ -1,36 +1,110 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# YVL — Yield Volatility Lending
 
-## Getting Started
+> Hackathon MVP — dynamic LTV lending against tokenised equities (AAPL, PLTR) with EWMA volatility-adjusted risk bands.
 
-First, run the development server:
+## Architecture
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+```
+contracts/
+  src/
+    VolatilityOracle.sol   ← EWMA state machine, O(1) poke
+    RiskEngine.sol          ← vol → LTV mapping, 3-band hysteresis
+    LendingVault.sol        ← deposit/borrow/repay/withdraw/liquidate
+    MockERC20.sol           ← testnet collateral tokens + USDC
+  script/
+    Deploy.s.sol            ← full deployment + mock aggregators
+  test/
+    Protocol.t.sol          ← 12 tests, all passing
+
+keeper/
+  keeper.js                 ← cron that calls poke() per asset
+
+app/
+  web3/
+    contracts.ts            ← ABIs + addresses
+    useProtocol.ts          ← useAssetRisk + useUserPosition hooks
+  components/
+    RiskGaugePanel.tsx      ← live arc gauges (vol %, band, LTV)
+    VolSpikeButton.tsx      ← demo spike button (on-stage moment)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Key Design Decisions
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| EWMA decay λ | 0.94 | RiskMetrics standard (J.P. Morgan) — half-life ≈ 11 days |
+| Return type | Simple (not log) | Avoids `ln` in Solidity; fine for hackathon-scale moves |
+| LTV model | 3 discrete bands | Auditable, demo-able, no continuous curve complexity |
+| Hysteresis | 300 bps buffer | Prevents LTV oscillation at boundaries — the UX story |
+| Keeper | Permissionless `poke()` | Self-updates on borrow/repay; keeper is optional for demo |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Volatility Bands
 
-## Learn More
+| Band | Annualised Vol | Max LTV |
+|------|---------------|---------|
+| 0 — Low    | ≤ 20% (2,000 bps) | **75%** |
+| 1 — Medium | ≤ 40% (4,000 bps) | **55%** |
+| 2 — High   | > 40%             | **35%** |
 
-To learn more about Next.js, take a look at the following resources:
+Hysteresis: vol must clear the threshold by **±300 bps** to trigger a band transition.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Quickstart
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### 1. Install Foundry
+```bash
+curl -L https://foundry.paradigm.xyz | bash
+foundryup
+```
 
-## Deploy on Vercel
+### 2. Build & test
+```bash
+cd contracts
+forge build
+forge test -vv
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### 3. Deploy to Arbitrum Sepolia
+```bash
+cp .env.example .env
+# fill PRIVATE_KEY and ARB_SEPOLIA_RPC
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+forge script script/Deploy.s.sol \
+  --rpc-url $ARB_SEPOLIA_RPC \
+  --broadcast \
+  --verify \
+  --etherscan-api-key $ARBISCAN_KEY \
+  -vvvv
+```
+
+### 4. Fill deployed addresses
+Paste the logged addresses into `app/web3/contracts.ts` under `arbitrumSepolia.id`.
+
+### 5. Run frontend
+```bash
+npm run dev
+```
+
+### 6. Run keeper
+```bash
+cd keeper
+npm install
+node keeper.js
+```
+
+## Demo Moment (on-stage)
+
+1. **RiskGaugePanel** shows live vol % + band pips for AAPL and PLTR
+2. Click **"−40% AAPL"** in `VolSpikeButton` → calls `MockAggregator.updateAnswer` + `oracle.poke` on-chain
+3. Watch the arc gauge animate from green (Band 0, 75% LTV) → amber → red (Band 2, 35% LTV)
+4. The hysteresis buffer means LTV steps down in increments, not a cliff — *that's the pitch*
+5. Click **Reset** to restore baseline prices
+
+## Frontend Hooks
+
+```ts
+// Live vol + band polling (30s interval)
+const { annualizedVolPct, bandLabel, currentLTVPct, bandColor } = useAssetRisk(assetAddress)
+
+// User position (15s interval)
+const { collateral, debt, healthFactorFloat, isHealthy } = useUserPosition(user, asset)
+```

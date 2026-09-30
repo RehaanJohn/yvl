@@ -1,0 +1,14 @@
+{
+  "type": "module",
+  "name": "yvl-keeper",
+  "version": "1.0.0",
+  "description": "YVL oracle keeper — calls poke() on a cron schedule",
+  "main": "keeper.js",
+  "scripts": {
+    "start": "node keeper.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.3.1",
+    "viem": "^2.56.8"
+  }
+}
