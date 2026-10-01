@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import Galaxy from './components/Galaxy';
 
 export default function Home() {
@@ -33,7 +34,7 @@ export default function Home() {
               Navigate markets with clarity. Build wealth with confidence.
             </p>
             <div className="hero-cta-row">
-              <button className="btn-primary" id="get-started-btn">Get Started</button>
+              <Link href="/dashboard" className="btn-primary" id="get-started-btn">Get Started</Link>
               <button className="btn-ghost" id="learn-more-btn">Learn More →</button>
             </div>
           </div>

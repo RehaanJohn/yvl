@@ -89,6 +89,17 @@ contract Deploy is Script {
         oracle.poke(address(aaplToken));
         oracle.poke(address(pltrToken));
 
+        // ── 9. Hackathon Demo Setup: Artificially pump PLTR volatility ────────
+        // By simulating historical volatility on PLTR, it will naturally fall into 
+        // Band 1 (55% LTV), while AAPL stays at Band 0 (75% LTV).
+        // This makes the "side-by-side deposit" pitch work perfectly out of the box!
+        pltrAgg.updateAnswer(20_000_000_00); // massive drop
+        oracle.poke(address(pltrToken));
+        pltrAgg.updateAnswer(30_000_000_00); // massive spike
+        oracle.poke(address(pltrToken));
+        pltrAgg.updateAnswer(24_000_000_00); // settle back to ~$24
+        oracle.poke(address(pltrToken));
+
         vm.stopBroadcast();
 
         // ── Log deployed addresses ───────────────────────────────────────────
