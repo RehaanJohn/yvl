@@ -4,22 +4,21 @@ import { useState } from 'react';
 import { useAccount, useWriteContract, useChainId } from 'wagmi';
 import { parseUnits, formatUnits } from 'viem';
 import { useUserPosition, useAssetRisk } from '../web3/useProtocol';
-import { CONTRACTS, LENDING_VAULT_ABI, ERC20_ABI, type AssetSymbol, ASSETS } from '../web3/contracts';
+import { CONTRACTS, LENDING_VAULT_ABI, ERC20_ABI } from '../web3/contracts';
 
 interface VaultPanelProps {
-  symbol: AssetSymbol;
+  assetAddress: `0x${string}`;
+  symbol: string;
+  name: string;
 }
 
 type Tab = 'Deposit' | 'Borrow' | 'Repay' | 'Withdraw';
 
-export default function VaultPanel({ symbol }: VaultPanelProps) {
+export default function VaultPanel({ assetAddress, symbol, name }: VaultPanelProps) {
   const { address } = useAccount();
   const chainId = useChainId();
   const c = CONTRACTS[chainId as keyof typeof CONTRACTS] ?? CONTRACTS[421614];
   
-  const assetAddress = symbol === 'AAPL' ? c.aaplToken : c.pltrToken;
-  const asset = ASSETS[symbol];
-
   // Hooks for live data
   const position = useUserPosition(address, assetAddress);
   const risk = useAssetRisk(assetAddress);
@@ -110,7 +109,7 @@ export default function VaultPanel({ symbol }: VaultPanelProps) {
     <div className="vault-panel">
       <div className="vault-header">
         <h3 className="vault-title">{symbol} Vault</h3>
-        <span className="vault-sub">Manage your {asset.name} position</span>
+        <span className="vault-sub">Manage your {name} position</span>
       </div>
 
       <div className="vault-stats">

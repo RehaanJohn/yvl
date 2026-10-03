@@ -1,18 +1,9 @@
 #!/usr/bin/env node
 /**
- * YVL Keeper — EWMA Oracle Poke
+ * YVL Keeper — EWMA Oracle Poke (Dynamic)
  * ─────────────────────────────
- * Calls VolatilityOracle.poke(asset) for each tracked asset on a cron schedule.
- * Designed to run via:
- *   - `node keeper.js`              — ad-hoc / manual
- *   - `pm2 start keeper.js`         — production daemon
- *   - Chainlink Automation          — register checkUpkeep/performUpkeep wrappers
- *
- * Requirements:
- *   npm install viem dotenv
- *
- * Usage:
- *   cp .env.example .env && node keeper.js
+ * Fetches all supported assets from LendingVault and calls VolatilityOracle.poke(asset) 
+ * for each tracked asset on a cron schedule.
  */
 
 import { createPublicClient, createWalletClient, http, parseAbi } from "viem";
@@ -27,16 +18,10 @@ dotenv.config();
 const PRIVATE_KEY           = process.env.KEEPER_PRIVATE_KEY;
 const RPC_URL               = process.env.ARB_SEPOLIA_RPC ?? "https://sepolia-rollup.arbitrum.io/rpc";
 const ORACLE_ADDRESS        = process.env.VOLATILITY_ORACLE_ADDRESS;
-const AAPL_TOKEN_ADDRESS    = process.env.AAPL_TOKEN_ADDRESS;
-const PLTR_TOKEN_ADDRESS    = process.env.PLTR_TOKEN_ADDRESS;
+const VAULT_ADDRESS         = process.env.LENDING_VAULT_ADDRESS;
 
 const POKE_INTERVAL_MS      = parseInt(process.env.POKE_INTERVAL_MS ?? "3600000", 10); // default: 1h
 const STALE_THRESHOLD_SEC   = parseInt(process.env.STALE_THRESHOLD_SEC ?? "7200", 10); // 2h stale
-
-const ASSETS = [
-  { name: "AAPL", address: AAPL_TOKEN_ADDRESS },
-  { name: "PLTR", address: PLTR_TOKEN_ADDRESS },
-].filter(a => a.address);
 
 // ─── ABI (minimal) ────────────────────────────────────────────────────────────
 
@@ -47,10 +32,14 @@ const ORACLE_ABI = parseAbi([
   "event VolUpdated(address indexed asset, uint256 variance, uint256 annualizedVolBps)",
 ]);
 
+const VAULT_ABI = parseAbi([
+  "function getSupportedAssets() external view returns (address[])"
+]);
+
 // ─── Client setup ─────────────────────────────────────────────────────────────
 
-if (!PRIVATE_KEY || !ORACLE_ADDRESS) {
-  console.error("Missing KEEPER_PRIVATE_KEY or VOLATILITY_ORACLE_ADDRESS in .env");
+if (!PRIVATE_KEY || !ORACLE_ADDRESS || !VAULT_ADDRESS) {
+  console.error("Missing KEEPER_PRIVATE_KEY, VOLATILITY_ORACLE_ADDRESS, or LENDING_VAULT_ADDRESS in .env");
   process.exit(1);
 }
 
@@ -69,6 +58,20 @@ const walletClient = createWalletClient({
 
 // ─── Core logic ───────────────────────────────────────────────────────────────
 
+async function getActiveMarkets() {
+  try {
+    const assets = await publicClient.readContract({
+      address: VAULT_ADDRESS,
+      abi: VAULT_ABI,
+      functionName: "getSupportedAssets",
+    });
+    return assets;
+  } catch (err) {
+    console.error(`[keeper] Error fetching supported assets from Vault: ${err.message}`);
+    return [];
+  }
+}
+
 async function shouldPoke(assetAddress) {
   try {
     const lastUpdate = await publicClient.readContract({
@@ -80,26 +83,26 @@ async function shouldPoke(assetAddress) {
     const age = Math.floor(Date.now() / 1000) - Number(lastUpdate);
     return age >= STALE_THRESHOLD_SEC;
   } catch (err) {
-    console.warn(`[keeper] Error checking staleness: ${err.message}`);
+    console.warn(`[keeper] Error checking staleness for ${assetAddress}: ${err.message}`);
     return true; // poke anyway on error
   }
 }
 
-async function pokeAsset(asset) {
+async function pokeAsset(assetAddress) {
   try {
-    const stale = await shouldPoke(asset.address);
+    const stale = await shouldPoke(assetAddress);
     if (!stale) {
-      console.log(`[keeper] ${asset.name} is fresh — skipping`);
+      console.log(`[keeper] Asset ${assetAddress} is fresh — skipping`);
       return;
     }
 
-    console.log(`[keeper] Poking ${asset.name} (${asset.address})...`);
+    console.log(`[keeper] Poking Asset (${assetAddress})...`);
 
     const hash = await walletClient.writeContract({
       address: ORACLE_ADDRESS,
       abi: ORACLE_ABI,
       functionName: "poke",
-      args: [asset.address],
+      args: [assetAddress],
     });
 
     const receipt = await publicClient.waitForTransactionReceipt({ hash });
@@ -109,29 +112,31 @@ async function pokeAsset(asset) {
         address: ORACLE_ADDRESS,
         abi: ORACLE_ABI,
         functionName: "annualizedVolBps",
-        args: [asset.address],
+        args: [assetAddress],
       });
       console.log(
-        `[keeper] ✓ ${asset.name} poked | tx: ${hash} | annualizedVol: ${Number(vol) / 1e18 * 100}%`
+        `[keeper] ✓ Asset ${assetAddress} poked | tx: ${hash} | annualizedVol: ${Number(vol) / 1e18 * 100}%`
       );
     } else {
-      console.error(`[keeper] ✗ ${asset.name} poke reverted | tx: ${hash}`);
+      console.error(`[keeper] ✗ Asset ${assetAddress} poke reverted | tx: ${hash}`);
     }
   } catch (err) {
-    console.error(`[keeper] Error poking ${asset.name}: ${err.message}`);
+    console.error(`[keeper] Error poking Asset ${assetAddress}: ${err.message}`);
   }
 }
 
 async function runPoke() {
   console.log(`\n[keeper] ${new Date().toISOString()} — running poke cycle`);
-  await Promise.allSettled(ASSETS.map(pokeAsset));
+  const assets = await getActiveMarkets();
+  console.log(`[keeper] Found ${assets.length} active markets.`);
+  await Promise.allSettled(assets.map(pokeAsset));
 }
 
 // ─── Entrypoint ───────────────────────────────────────────────────────────────
 
-console.log("[keeper] YVL Oracle Keeper starting...");
+console.log("[keeper] YVL Dynamic Oracle Keeper starting...");
 console.log(`[keeper] Oracle: ${ORACLE_ADDRESS}`);
-console.log(`[keeper] Assets: ${ASSETS.map(a => a.name).join(", ")}`);
+console.log(`[keeper] Vault:  ${VAULT_ADDRESS}`);
 console.log(`[keeper] Poke interval: ${POKE_INTERVAL_MS / 1000}s`);
 
 // Run immediately on start, then on interval

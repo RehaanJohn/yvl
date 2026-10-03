@@ -1,8 +1,6 @@
 'use client';
 
-import { useAssetRisk, type AssetVolData } from '../web3/useProtocol';
-import { CONTRACTS, ASSETS, type AssetSymbol } from '../web3/contracts';
-import { useChainId } from 'wagmi';
+import { useAssetRisk, useAssetMetadata, useSupportedAssets } from '../web3/useProtocol';
 
 // ─── Band indicator ────────────────────────────────────────────────────────────
 
@@ -60,9 +58,13 @@ function ArcGauge({ pct, color }: { pct: number; color: string }) {
 
 // ─── Single-asset risk card ────────────────────────────────────────────────────
 
-function AssetRiskCard({ symbol, assetAddress }: { symbol: AssetSymbol; assetAddress: `0x${string}` }) {
-  const asset = ASSETS[symbol];
+function AssetRiskCard({ assetAddress }: { assetAddress: `0x${string}` }) {
+  const { symbol, name } = useAssetMetadata(assetAddress);
   const risk  = useAssetRisk(assetAddress);
+
+  // Generate a stable color based on address
+  const h = parseInt(assetAddress.slice(2, 6), 16) % 360;
+  const assetColor = `hsl(${h}, 70%, 65%)`;
 
   // vol % for gauge fill: cap at 80% annualised (extreme) = full gauge
   const volFloat = risk.annualizedVolBps > 0n
@@ -77,10 +79,10 @@ function AssetRiskCard({ symbol, assetAddress }: { symbol: AssetSymbol; assetAdd
     <div className="risk-card" id={`risk-card-${symbol.toLowerCase()}`}>
       {/* Header */}
       <div className="risk-card-header">
-        <div className="risk-asset-badge" style={{ background: `${asset.accentColor}22`, borderColor: `${asset.accentColor}44` }}>
-          <span className="risk-asset-ticker" style={{ color: asset.color }}>{symbol}</span>
+        <div className="risk-asset-badge" style={{ background: `${assetColor}22`, borderColor: `${assetColor}44` }}>
+          <span className="risk-asset-ticker" style={{ color: assetColor }}>{symbol}</span>
         </div>
-        <span className="risk-asset-name">{asset.name}</span>
+        <span className="risk-asset-name">{name}</span>
       </div>
 
       {/* Arc gauge */}
@@ -132,11 +134,10 @@ function AssetRiskCard({ symbol, assetAddress }: { symbol: AssetSymbol; assetAdd
   );
 }
 
-// ─── Risk gauge panel (both assets) ──────────────────────────────────────────
+// ─── Risk gauge panel (Dynamic) ──────────────────────────────────────────────
 
 export default function RiskGaugePanel() {
-  const chainId = useChainId();
-  const c = CONTRACTS[chainId as keyof typeof CONTRACTS] ?? CONTRACTS[421614];
+  const { assets, isLoading } = useSupportedAssets();
 
   return (
     <div className="risk-panel" id="risk-gauge-panel">
@@ -145,8 +146,13 @@ export default function RiskGaugePanel() {
         <p className="risk-panel-sub">EWMA volatility → LTV band, updated every poke</p>
       </div>
       <div className="risk-cards-row">
-        <AssetRiskCard symbol="AAPL" assetAddress={c.aaplToken} />
-        <AssetRiskCard symbol="PLTR" assetAddress={c.pltrToken} />
+        {isLoading && <p className="text-white/50 text-sm py-4">Loading listed markets...</p>}
+        {assets.map((address) => (
+          <AssetRiskCard key={address} assetAddress={address} />
+        ))}
+        {!isLoading && assets.length === 0 && (
+          <p className="text-white/50 text-sm py-4">No markets registered yet.</p>
+        )}
       </div>
     </div>
   );

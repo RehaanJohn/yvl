@@ -30,11 +30,10 @@ import "../src/MockERC20.sol";
 ///
 contract Deploy is Script {
     // ── Chainlink Arb Sepolia feeds ──────────────────────────────────────────
-    // NOTE: Verify these at https://docs.chain.link/data-feeds/price-feeds/addresses/?network=arbitrum-sepolia
-    // AAPL and PLTR feeds may require Chainlink Functions / Data Streams on testnet.
-    // For hackathon fallback: deploy MockV3Aggregator for both assets.
-    address constant AAPL_FEED = 0x8D0cC5F38f9e802475F2cFf7F958513bE1C3D148;
-    address constant PLTR_FEED = address(0); // placeholder — not used; mock aggregators deployed below
+    // Official Chainlink Price Feeds on Arbitrum Sepolia
+    address constant ETH_FEED  = 0xd30e2101a97dcbAeBCBC04F14C3f624E67A35165; // ETH/USD
+    address constant BTC_FEED  = 0x56a43EB56Da12C0dc1D972ACb089c06a5dEF8e69; // BTC/USD
+    address constant LINK_FEED = 0xB7C8Fb1db45007F98a68DA0588E1Aa524C318F0d; // LINK/USD
 
     function run() external {
         uint256 deployerKey = vm.envUint("PRIVATE_KEY");
@@ -42,13 +41,13 @@ contract Deploy is Script {
 
         vm.startBroadcast(deployerKey);
 
-        // ── 1. Mock collateral tokens ────────────────────────────────────────
-        MockERC20 aaplToken = new MockERC20("AAPL Token", "AAPLt");
-        MockERC20 pltrToken = new MockERC20("PLTR Token", "PLTRt");
+        // ── 1. Mock collateral tokens (acting as testnet WETH, WBTC, LINK) ──
+        MockERC20 wethToken = new MockERC20("Wrapped Ether", "WETH");
+        MockERC20 wbtcToken = new MockERC20("Wrapped Bitcoin", "WBTC");
+        MockERC20 linkToken = new MockERC20("Chainlink", "LINK");
 
-        // ── 2. Mock USDC (or use real USDC on testnet if available) ──────────
+        // ── 2. Mock USDC ──────────────────────────────────────────────────────
         MockERC20 mockUsdc  = new MockERC20("USD Coin", "USDC");
-        // Override decimals to 6 if you want exact USDC parity — MockERC20 uses 18 for simplicity
 
         // ── 3. Core protocol contracts ───────────────────────────────────────
         VolatilityOracle oracle    = new VolatilityOracle();
@@ -59,46 +58,33 @@ contract Deploy is Script {
             address(mockUsdc)
         );
 
-        // ── 4. Wire up oracle feeds ──────────────────────────────────────────
-        // For hackathon: deploy MockV3Aggregators if real feeds aren't available
-        // oracle.registerFeed(address(aaplToken), AAPL_FEED);
-        // oracle.registerFeed(address(pltrToken), PLTR_FEED);
+        // ── 4. Wire up oracle to feeds ──────────────────────────────────
+        oracle.registerFeed(address(wethToken), ETH_FEED);
+        oracle.registerFeed(address(wbtcToken), BTC_FEED);
 
-        // Hackathon path: use mock aggregators (see MockV3Aggregator below)
-        MockV3Aggregator aaplAgg = new MockV3Aggregator(8, 21500_000_000_00); // AAPL ~$215
-        MockV3Aggregator pltrAgg = new MockV3Aggregator(8,    24_000_000_00); // PLTR ~$24
-
-        oracle.registerFeed(address(aaplToken), address(aaplAgg));
-        oracle.registerFeed(address(pltrToken), address(pltrAgg));
+        MockV3Aggregator linkAgg = new MockV3Aggregator(8, 15_000_000_00); // LINK ~$15
+        oracle.registerFeed(address(linkToken), address(linkAgg));
 
         // ── 5. Wire up vault feeds ───────────────────────────────────────────
-        vault.registerAsset(address(aaplToken), address(aaplAgg));
-        vault.registerAsset(address(pltrToken), address(pltrAgg));
+        vault.registerAsset(address(wethToken), ETH_FEED);
+        vault.registerAsset(address(wbtcToken), BTC_FEED);
+        vault.registerAsset(address(linkToken), address(linkAgg));
 
         // ── 6. Register vault with RiskEngine ────────────────────────────────
         riskEng.setVault(address(vault));
 
         // ── 7. Seed USDC liquidity into vault for borrowers ──────────────────
-        mockUsdc.mint(address(vault), 1_000_000 * 1e18); // 1M mock USDC
+        mockUsdc.mint(address(vault), 1_000_000 * 1e18);
 
         // ── 8. Faucet: mint collateral tokens to deployer for demo ───────────
-        aaplToken.mint(deployer, 100 * 1e18);  // 100 AAPL tokens
-        pltrToken.mint(deployer, 500 * 1e18);  // 500 PLTR tokens
+        wethToken.mint(deployer, 100 * 1e18);
+        wbtcToken.mint(deployer, 10 * 1e18);
+        linkToken.mint(deployer, 5000 * 1e18);
 
-        // Seed oracle with initial prices
-        oracle.poke(address(aaplToken));
-        oracle.poke(address(pltrToken));
-
-        // ── 9. Hackathon Demo Setup: Artificially pump PLTR volatility ────────
-        // By simulating historical volatility on PLTR, it will naturally fall into 
-        // Band 1 (55% LTV), while AAPL stays at Band 0 (75% LTV).
-        // This makes the "side-by-side deposit" pitch work perfectly out of the box!
-        pltrAgg.updateAnswer(20_000_000_00); // massive drop
-        oracle.poke(address(pltrToken));
-        pltrAgg.updateAnswer(30_000_000_00); // massive spike
-        oracle.poke(address(pltrToken));
-        pltrAgg.updateAnswer(24_000_000_00); // settle back to ~$24
-        oracle.poke(address(pltrToken));
+        // Seed oracle with initial prices (reads from the live Arbitrum Sepolia network)
+        oracle.poke(address(wethToken));
+        oracle.poke(address(wbtcToken));
+        oracle.poke(address(linkToken));
 
         vm.stopBroadcast();
 
@@ -107,11 +93,11 @@ contract Deploy is Script {
         console.log("VolatilityOracle:", address(oracle));
         console.log("RiskEngine:      ", address(riskEng));
         console.log("LendingVault:    ", address(vault));
-        console.log("AAPL Token:      ", address(aaplToken));
-        console.log("PLTR Token:      ", address(pltrToken));
+        console.log("WETH Token:      ", address(wethToken));
+        console.log("WBTC Token:      ", address(wbtcToken));
+        console.log("LINK Token:      ", address(linkToken));
         console.log("Mock USDC:       ", address(mockUsdc));
-        console.log("AAPL Aggregator: ", address(aaplAgg));
-        console.log("PLTR Aggregator: ", address(pltrAgg));
+        console.log("LINK Mock Agg:   ", address(linkAgg));
     }
 }
 

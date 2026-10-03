@@ -7,6 +7,7 @@ import {
   VOLATILITY_ORACLE_ABI,
   RISK_ENGINE_ABI,
   LENDING_VAULT_ABI,
+  ERC20_ABI,
 } from './contracts';
 
 const WAD = BigInt('1000000000000000000'); // 1e18
@@ -181,5 +182,46 @@ export function useUserPosition(
     healthFactorFloat: hfFloat,
     isHealthy:        hfFloat >= 0.95,
     isLoading:        l1 || l2 || l3,
+  };
+}
+
+// ─── Supported Assets Directory ────────────────────────────────────────────────
+
+export function useSupportedAssets() {
+  const c = useContracts();
+  const { data: assets, isLoading, error } = useReadContract({
+    address: c.lendingVault,
+    abi: LENDING_VAULT_ABI,
+    functionName: 'getSupportedAssets',
+    query: {
+      refetchInterval: 60_000,
+    }
+  });
+
+  return {
+    assets: (assets as `0x${string}`[]) || [],
+    isLoading,
+    error,
+  };
+}
+
+export function useAssetMetadata(assetAddress: `0x${string}` | undefined) {
+  const { data: symbol } = useReadContract({
+    address: assetAddress,
+    abi: ERC20_ABI,
+    functionName: 'symbol',
+    query: { enabled: !!assetAddress },
+  });
+
+  const { data: name } = useReadContract({
+    address: assetAddress,
+    abi: ERC20_ABI,
+    functionName: 'name',
+    query: { enabled: !!assetAddress },
+  });
+
+  return {
+    symbol: (symbol as string) || '...',
+    name: (name as string) || 'Unknown Asset',
   };
 }

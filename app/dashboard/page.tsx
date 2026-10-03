@@ -3,9 +3,18 @@
 import Galaxy from '../components/Galaxy';
 import RiskGaugePanel from '../components/RiskGaugePanel';
 import VaultPanel from '../components/VaultPanel';
-import VolSpikeButton from '../components/VolSpikeButton';
+import AdminPanel from '../components/AdminPanel';
+import { useSupportedAssets, useAssetMetadata } from '../web3/useProtocol';
+
+// Wrapper to fetch symbol/name for the VaultPanel dynamically
+function DynamicVault({ assetAddress }: { assetAddress: `0x${string}` }) {
+  const { symbol, name } = useAssetMetadata(assetAddress);
+  return <VaultPanel assetAddress={assetAddress} symbol={symbol} name={name} />;
+}
 
 export default function Dashboard() {
+  const { assets, isLoading } = useSupportedAssets();
+
   return (
     <div className="page-root" style={{ overflowY: 'auto' }}>
       {/* Background */}
@@ -25,38 +34,39 @@ export default function Dashboard() {
 
       <main className="dashboard-main relative z-10 p-8 pt-24 min-h-screen flex flex-col gap-8 max-w-7xl mx-auto">
         <header className="mb-4">
-          <h1 className="text-4xl font-bold font-syne text-white tracking-tight">Protocol Dashboard</h1>
-          <p className="text-white/50 mt-2">Manage your collateral and monitor real-time volatility bands.</p>
+          <h1 className="text-4xl font-bold font-syne text-white tracking-tight">Market Explorer</h1>
+          <p className="text-white/50 mt-2">Manage collateral across real-time dynamic volatility markets.</p>
         </header>
 
         {/* Demo Explanation Section */}
         <div className="demo-explanation bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-md">
-          <h2 className="text-lg font-syne font-bold text-white mb-2">Hackathon Demo Flow</h2>
+          <h2 className="text-lg font-syne font-bold text-white mb-2">Live Dynamic LTV Demo</h2>
+          <p className="text-white/70 text-sm leading-relaxed mb-3">
+            This dashboard dynamically pulls all supported markets from the LendingVault contract.
+            Each market's volatility is tracked in real-time via Arbitrum Sepolia Chainlink price feeds.
+          </p>
           <ol className="list-decimal list-inside text-white/70 space-y-2 text-sm">
-            <li><strong>The Setup:</strong> Deposit <strong>100 AAPL</strong> and <strong>100 PLTR</strong> into their respective vaults.</li>
-            <li><strong>The Observation:</strong> Look at the Live Risk Gauges. PLTR is historically volatile and sits in <strong>Band 1 (55% LTV)</strong>. AAPL is stable and sits in <strong>Band 0 (75% LTV)</strong>.</li>
-            <li><strong>The Proof:</strong> Go to the Borrow tab. Notice that even though you deposited the exact same amount of tokens, the algorithm automatically grants you higher borrowing power for AAPL.</li>
-            <li><strong>The Climax:</strong> Use the "Simulate Vol Spike" buttons below to crash the AAPL price. Watch the Risk Gauge spike and the LTV band safely step down via hysteresis, protecting the protocol from insolvency!</li>
+            <li><strong>Deposit:</strong> Get testnet WETH, WBTC, or LINK, and deposit them below.</li>
+            <li><strong>Risk Adjusted LTV:</strong> Look at the Live Risk Gauges. The protocol algorithmically assigns lower LTVs to highly volatile assets.</li>
+            <li><strong>Borrow:</strong> Notice how your borrowing power accurately reflects the real-world historical volatility of each asset!</li>
           </ol>
         </div>
 
+        <AdminPanel />
+
         {/* Main Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Left Column: Risk & Demo Tools */}
+          {/* Left Column: Risk */}
           <div className="flex flex-col gap-8">
             <RiskGaugePanel />
-            
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-md flex flex-col gap-6">
-              <h3 className="font-syne font-bold text-white/90">Oracle Admin Tools (Demo)</h3>
-              <VolSpikeButton symbol="AAPL" />
-              <VolSpikeButton symbol="PLTR" />
-            </div>
           </div>
 
-          {/* Right Column: Vaults */}
+          {/* Right Column: Dynamic Vaults */}
           <div className="flex flex-col gap-8">
-            <VaultPanel symbol="AAPL" />
-            <VaultPanel symbol="PLTR" />
+            {isLoading && <p className="text-white/50">Loading Vaults...</p>}
+            {assets.map((assetAddress) => (
+              <DynamicVault key={assetAddress} assetAddress={assetAddress} />
+            ))}
           </div>
         </div>
       </main>

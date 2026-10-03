@@ -36,8 +36,11 @@ contract LendingVault {
 
     // ─── Storage ──────────────────────────────────────────────────────────────
 
-    /// @notice Supported collateral assets. Only AAPL-token and PLTR-token for hackathon.
+    /// @notice Supported collateral assets.
     mapping(address => bool) public supportedAssets;
+    
+    /// @notice List of all supported collateral assets (for enumerability)
+    address[] public allAssets;
 
     /// @notice Chainlink USD price feed per collateral asset (same feeds as oracle).
     mapping(address => AggregatorV3Interface) public priceFeeds;
@@ -91,10 +94,18 @@ contract LendingVault {
     ///         The same feed address should be registered in VolatilityOracle too.
     function registerAsset(address asset, address feed) external {
         if (msg.sender != owner) revert NotOwner();
-        supportedAssets[asset] = true;
+        if (!supportedAssets[asset]) {
+            supportedAssets[asset] = true;
+            allAssets.push(asset);
+        }
         priceFeeds[asset]      = AggregatorV3Interface(feed);
         feedDecimals[asset]    = AggregatorV3Interface(feed).decimals();
         emit AssetRegistered(asset, feed);
+    }
+
+    /// @notice Returns an array of all registered asset addresses
+    function getSupportedAssets() external view returns (address[] memory) {
+        return allAssets;
     }
 
     // ─── User actions ─────────────────────────────────────────────────────────
