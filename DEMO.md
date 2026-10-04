@@ -11,7 +11,7 @@ Open http://localhost:3000/dashboard?demo=1 for rehearsal, or /dashboard for liv
 
 ## Rehearsal
 
-All market readings, positions, and transactions are explicitly labeled as simulated. LINK starts with 100 tokens deposited and $500 of debt. WETH and WBTC start at 75% LTV. Practice deposit, borrow, repay, or withdrawal actions without a wallet.
+All market readings, positions, and transactions are explicitly labeled as simulated. LINK starts with 100 tokens deposited and $500 of debt. WETH and WBTC start at 75% LTV. Practice deposit, borrow, repay, or withdrawal actions without a wallet. The global vault accepts USD amounts and previews the equivalent collateral tokens for deposits and withdrawals.
 
 Click **Simulate 50% crash**. LINK goes from $15 to $7.50, illustrative annualized volatility goes to 300%, and the default high-risk LTV goes from 75% to 35%. The sample LINK position becomes unhealthy and available borrowing falls to zero. The reset icon restores the scenario's market prices and risk; it retains any practice deposits and debt. Switching modes resets all rehearsal state.
 

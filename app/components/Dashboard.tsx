@@ -8,7 +8,7 @@ import {
   SlidersHorizontal,
   Wallet,
 } from "lucide-react";
-import { useSupportedAssets, useAssetMetadata } from "../web3/useProtocol";
+import { useSupportedAssets } from "../web3/useProtocol";
 import RiskGaugePanel from "./RiskGaugePanel";
 import MarketCard, { TokenMark } from "./MarketCard";
 import VaultPanel from "./VaultPanel";
@@ -42,11 +42,6 @@ const rehearsalMarkets = [
     initialized: true,
   },
 ];
-
-function LiveVault({ asset }: { asset: `0x${string}` }) {
-  const { symbol, name } = useAssetMetadata(asset);
-  return <VaultPanel assetAddress={asset} symbol={symbol} name={name} />;
-}
 
 function MarketHeading({ rehearsal }: { rehearsal: boolean }) {
   return (
@@ -139,7 +134,7 @@ function LiveDashboard() {
             <Wallet size={19} className="muted" />
           </div>
           {selected ? (
-            <LiveVault key={selected} asset={selected} />
+            <VaultPanel key={selected} assetAddress={selected} assets={assets} onSelect={setChosen} />
           ) : (
             <div className="empty-state glass">
               <p>
@@ -232,7 +227,8 @@ function RehearsalDashboard() {
       return;
     }
     const next = { ...pos };
-    if (tab === "Deposit") next.collateral += value;
+    const tokenValue = value / price;
+    if (tab === "Deposit") next.collateral += tokenValue;
     if (tab === "Borrow") {
       if (value > available) {
         setError("This amount exceeds your available borrowing power.");
@@ -243,13 +239,13 @@ function RehearsalDashboard() {
     if (tab === "Repay") next.debt -= Math.min(value, pos.debt);
     if (tab === "Withdraw") {
       if (
-        value > pos.collateral ||
-        (pos.collateral - value) * price * ltv < pos.debt
+        tokenValue > pos.collateral ||
+        (pos.collateral - tokenValue) * price * ltv < pos.debt
       ) {
         setError("Keep enough collateral to cover your outstanding debt.");
         return;
       }
-      next.collateral -= value;
+      next.collateral -= tokenValue;
     }
     setPositions({ ...positions, [selected]: next });
     setAmount("");
@@ -304,7 +300,7 @@ function RehearsalDashboard() {
               <span className="asset-heading">
                 <TokenMark symbol={selected} />
                 <span>
-                  <h3>{selected} position</h3>
+                  <h3>Global vault</h3>
                   <span className="muted">{market.name}</span>
                 </span>
               </span>
@@ -315,11 +311,17 @@ function RehearsalDashboard() {
                 {health < 0.95 ? "At risk" : "Healthy"}
               </span>
             </div>
+            <label className="amount-label" htmlFor="rehearsal-asset">Collateral market</label>
+            <select id="rehearsal-asset" className="vault-asset-select" value={selected}
+              onChange={(event) => { setSelected(event.target.value); setAmount(""); setError(""); }}>
+              {rehearsalMarkets.map((m) => <option key={m.symbol} value={m.symbol}>{m.symbol}</option>)}
+            </select>
             <div className="vault-stats">
               <div>
                 <span className="metric-caption">Deposited</span>
                 <strong>
-                  {pos.collateral.toLocaleString()} <small>{selected}</small>
+                  ${(pos.collateral * price).toLocaleString("en-US", { maximumFractionDigits: 2 })}
+                  <small className="collateral-token-value">{pos.collateral.toLocaleString()} {selected}</small>
                 </strong>
               </div>
               <div>
@@ -361,7 +363,7 @@ function RehearsalDashboard() {
               )}
             </div>
             <label className="amount-label" htmlFor="rehearsal-amount">
-              {tab} amount
+              {tab} amount in USD
             </label>
             <div className="v-input-wrapper">
               <input
@@ -376,9 +378,12 @@ function RehearsalDashboard() {
                 onChange={(e) => setAmount(e.target.value)}
               />
               <span className="v-input-currency">
-                {tab === "Borrow" || tab === "Repay" ? "USDC" : selected}
+                USD
               </span>
             </div>
+            {(tab === "Deposit" || tab === "Withdraw") && amount && (
+              <p className="vault-note">≈ {(Number(amount) / price).toLocaleString("en-US", { maximumFractionDigits: 6 })} {selected}</p>
+            )}
             {error && (
               <p className="v-error" role="alert">
                 {error}

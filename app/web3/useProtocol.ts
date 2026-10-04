@@ -144,6 +144,7 @@ export interface UserPositionData {
   isLoading: boolean;
   /** Remaining borrowing capacity after outstanding debt. */
   maxBorrowable: bigint;
+  collateralUsdc: bigint;
 }
 
 export function useUserPosition(
@@ -206,6 +207,15 @@ export function useUserPosition(
     },
   });
 
+  const { data: collatUsdc, isLoading: l5 } = useReadContract({
+    chainId: 421614,
+    address: c.lendingVault,
+    abi: LENDING_VAULT_ABI,
+    functionName: "collateralValueUsdc",
+    args: assetAddress ? [assetAddress, collateralAmt ?? 0n] : undefined,
+    query: { enabled: !!assetAddress, refetchInterval: 15_000 },
+  });
+
   const hfBps = hf ?? 0n;
   const hfFloat = hfBps >= BigInt(2 ** 200) ? 999 : Number(hfBps) / 10_000;
 
@@ -215,7 +225,8 @@ export function useUserPosition(
     healthFactorBps: hfBps,
     healthFactorFloat: hfFloat,
     isHealthy: hfFloat >= 0.95,
-    isLoading: l1 || l2 || l3 || l4,
+    isLoading: l1 || l2 || l3 || l4 || l5,
+    collateralUsdc: collatUsdc ?? 0n,
     maxBorrowable:
       (maxBorrow ?? 0n) > (debtAmt ?? 0n)
         ? (maxBorrow ?? 0n) - (debtAmt ?? 0n)
@@ -269,4 +280,17 @@ export function useAssetMetadata(assetAddress: `0x${string}` | undefined) {
     symbol: (symbol as string) || "...",
     name: (name as string) || "Unknown Asset",
   };
+}
+
+export function useAssetPrice(assetAddress: `0x${string}` | undefined) {
+  const c = useContracts();
+  const { data: price, isLoading } = useReadContract({
+    chainId: 421614,
+    address: c.lendingVault,
+    abi: LENDING_VAULT_ABI,
+    functionName: "collateralValueUsdc",
+    args: assetAddress ? [assetAddress, 10n ** 18n] : undefined,
+    query: { enabled: !!assetAddress, refetchInterval: 60_000 },
+  });
+  return { priceUsdc6Decimals: price ?? 0n, isLoading };
 }

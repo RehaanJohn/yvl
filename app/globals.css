@@ -1228,3 +1228,15 @@ h1 {
     background: rgba(255, 255, 255, 0.94);
   }
 }
+
+.vault-asset-select {
+  width: 100%;
+  padding: 12px 14px;
+  margin: 8px 0 18px;
+  border: 1px solid rgba(30, 50, 80, 0.12);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.65);
+  color: inherit;
+  font: inherit;
+}
+.collateral-token-value { display: block; margin-top: 4px; }

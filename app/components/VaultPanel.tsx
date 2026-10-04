@@ -5,14 +5,14 @@ import { useAccount, useWriteContract, usePublicClient } from "wagmi";
 import { useQueryClient } from "@tanstack/react-query";
 import { parseUnits, formatUnits, type Hash } from "viem";
 import { LoaderCircle, Plus } from "lucide-react";
-import { useUserPosition } from "../web3/useProtocol";
+import { useUserPosition, useAssetMetadata, useAssetPrice } from "../web3/useProtocol";
 import { CONTRACTS, LENDING_VAULT_ABI, ERC20_ABI } from "../web3/contracts";
 import { TokenMark } from "./MarketCard";
 
 interface VaultPanelProps {
   assetAddress: `0x${string}`;
-  symbol: string;
-  name: string;
+  assets: `0x${string}`[];
+  onSelect: (asset: `0x${string}`) => void;
 }
 type Tab = "Deposit" | "Borrow" | "Repay" | "Withdraw";
 const c = CONTRACTS[421614];
@@ -23,12 +23,14 @@ const dollars = (v: bigint) =>
 
 export default function VaultPanel({
   assetAddress,
-  symbol,
-  name,
+  assets,
+  onSelect,
 }: VaultPanelProps) {
   const { address, isConnected, chainId } = useAccount();
   const client = usePublicClient({ chainId: 421614 });
   const position = useUserPosition(address, assetAddress);
+  const { symbol, name } = useAssetMetadata(assetAddress);
+  const { priceUsdc6Decimals } = useAssetPrice(assetAddress);
   const queries = useQueryClient();
   const [activeTab, setActiveTab] = useState<Tab>("Deposit");
   const [amount, setAmount] = useState("");
@@ -45,10 +47,13 @@ export default function VaultPanel({
     setPending(true);
     setError(undefined);
     try {
-      const value = parseUnits(
-        amount,
-        activeTab === "Borrow" || activeTab === "Repay" ? 6 : 18,
-      );
+      const usdValue = parseUnits(amount, 6);
+      const collateralAction = activeTab === "Deposit" || activeTab === "Withdraw";
+      if (collateralAction && priceUsdc6Decimals <= 0n)
+        throw new Error("Price feed not ready. Try again after the price loads.");
+      const value = collateralAction
+        ? (usdValue * 10n ** 18n) / priceUsdc6Decimals
+        : usdValue;
       if (value <= 0n) throw new Error("Enter an amount greater than zero.");
       const confirm = async (hash: Hash) => {
         const receipt = await client.waitForTransactionReceipt({ hash });
@@ -122,13 +127,22 @@ export default function VaultPanel({
   };
   const currency =
     activeTab === "Borrow" || activeTab === "Repay" ? "USDC" : symbol;
+  const tokenPreview = Number(amount) > 0 && priceUsdc6Decimals > 0n
+    ? Number(amount) / Number(formatUnits(priceUsdc6Decimals, 6))
+    : 0;
+  const getSymbol = (asset: string) => {
+    if (asset.toLowerCase() === c.wethToken.toLowerCase()) return "WETH";
+    if (asset.toLowerCase() === c.wbtcToken.toLowerCase()) return "WBTC";
+    if (asset.toLowerCase() === c.linkToken.toLowerCase()) return "LINK";
+    return asset.slice(0, 6);
+  };
   return (
     <div className="vault-panel glass">
       <div className="vault-header">
         <span className="asset-heading">
           <TokenMark symbol={symbol} />
           <span>
-            <h3>{symbol} position</h3>
+            <h3>Global vault</h3>
             <span className="muted">{name}</span>
           </span>
         </span>
@@ -145,17 +159,24 @@ export default function VaultPanel({
           </span>
         )}
       </div>
+      <label className="amount-label" htmlFor="vault-asset">Collateral market</label>
+      <select
+        id="vault-asset"
+        className="vault-asset-select"
+        value={assetAddress}
+        disabled={pending}
+        onChange={(event) => onSelect(event.target.value as `0x${string}`)}
+      >
+        {assets.map((asset) => <option key={asset} value={asset}>{getSymbol(asset)}</option>)}
+      </select>
       <div className="vault-stats">
         <div>
           <span className="metric-caption">Deposited</span>
           <strong>
-            {isConnected
-              ? Number(formatUnits(position.collateral, 18)).toLocaleString(
-                  "en-US",
-                  { maximumFractionDigits: 4 },
-                )
-              : "—"}{" "}
-            <small>{symbol}</small>
+            {isConnected ? `$${dollars(position.collateralUsdc)}` : "—"}
+            <small className="collateral-token-value">
+              {isConnected ? `${Number(formatUnits(position.collateral, 18)).toLocaleString("en-US", { maximumFractionDigits: 4 })} ${symbol}` : symbol}
+            </small>
           </strong>
         </div>
         <div>
@@ -200,7 +221,7 @@ export default function VaultPanel({
         ))}
       </div>
       <label className="amount-label" htmlFor={`amount-${assetAddress}`}>
-        {activeTab} amount
+        {activeTab} amount in USD
       </label>
       <div className="v-input-wrapper">
         <input
@@ -215,8 +236,13 @@ export default function VaultPanel({
           onChange={(e) => setAmount(e.target.value)}
           disabled={pending}
         />
-        <span className="v-input-currency">{currency}</span>
+        <span className="v-input-currency">USD</span>
       </div>
+      {(activeTab === "Deposit" || activeTab === "Withdraw") && amount && (
+        <p className="vault-note">
+          {priceUsdc6Decimals > 0n ? `≈ ${tokenPreview.toLocaleString("en-US", { maximumFractionDigits: 6 })} ${symbol}` : "Waiting for price feed"}
+        </p>
+      )}
       {error && (
         <p className="v-error" role="alert">
           {error}

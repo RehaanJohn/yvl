@@ -173,6 +173,16 @@ export const RISK_ENGINE_ABI = [
 
 export const LENDING_VAULT_ABI = [
   {
+    inputs: [
+      { name: "asset", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    name: "collateralValueUsdc",
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
     "inputs": [
       {"internalType": "address","name": "asset","type": "address"},
       {"internalType": "address","name": "feed","type": "address"}
