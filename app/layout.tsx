@@ -1,19 +1,13 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import { Providers } from "./providers";
 import Navbar from "./components/Navbar";
 import { Toaster } from "sonner";
 import "./globals.css";
 
-const inter = Inter({
-  subsets: ["latin"],
-  display: "swap",
-});
-
 export const metadata: Metadata = {
-  title: "Your Portal to Tomorrow's Financial Security",
+  title: "YVL — Lending that moves with the market",
   description:
-    "Navigate markets with clarity. Build wealth with confidence. A premium financial intelligence platform.",
+    "Volatility-aware lending. Explore collateral markets and watch borrowing limits adapt to changing risk.",
 };
 
 export default function RootLayout({
@@ -22,12 +16,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={inter.className}>
+    <html lang="en">
       <body>
         <Providers>
           <Navbar />
           {children}
-          <Toaster theme="dark" position="bottom-right" richColors />
+          <Toaster theme="light" position="bottom-right" richColors />
         </Providers>
       </body>
     </html>

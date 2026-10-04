@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:demo": "tsc app/web3/crashDemo.ts --outDir .demo-test --module commonjs --target ES2020 --skipLibCheck --esModuleInterop && node tests/crash-demo.test.cjs"
   },
   "dependencies": {
     "@rainbow-me/rainbowkit": "^2.2.11",

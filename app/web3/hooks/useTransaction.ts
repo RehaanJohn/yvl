@@ -61,7 +61,10 @@ export function useTransaction() {
         }
       }
       return hash;
-    } catch (error: any) {
+    } catch (caught) {
+      const error: Error & { code?: number; shortMessage?: string } = caught instanceof Error
+        ? caught as Error & { code?: number; shortMessage?: string }
+        : new Error('An unknown error occurred.');
       setStatus('error');
       if (error?.message?.includes('User rejected') || error?.code === 4001) {
         toast.dismiss(toastId);

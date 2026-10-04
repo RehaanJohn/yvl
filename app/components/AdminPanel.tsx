@@ -1,88 +1,141 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { useWriteContract, useWaitForTransactionReceipt, useChainId } from 'wagmi';
-import { CONTRACTS, LENDING_VAULT_ABI, VOLATILITY_ORACLE_ABI } from '../web3/contracts';
+import { useState, useRef } from "react";
+import {
+  useAccount,
+  useWriteContract,
+  usePublicClient,
+  useReadContract,
+} from "wagmi";
+import { useQueryClient } from "@tanstack/react-query";
+import { isAddress, parseAbi } from "viem";
+import {
+  CONTRACTS,
+  LENDING_VAULT_ABI,
+  VOLATILITY_ORACLE_ABI,
+} from "../web3/contracts";
+
+const c = CONTRACTS[421614];
+const ownerAbi = parseAbi(["function owner() view returns (address)"]);
 
 export default function AdminPanel() {
-  const [tokenAddress, setTokenAddress] = useState('');
-  const [feedAddress, setFeedAddress] = useState('');
-  const chainId = useChainId();
-  const c = CONTRACTS[chainId as keyof typeof CONTRACTS] ?? CONTRACTS[421614];
-
-  // We need to write to Vault and Oracle
-  const { writeContractAsync: writeVault, data: vaultTxHash, isPending: isVaultPending } = useWriteContract();
-  const { writeContractAsync: writeOracle, data: oracleTxHash, isPending: isOraclePending } = useWriteContract();
-
-  const { isLoading: isVaultWaiting } = useWaitForTransactionReceipt({ hash: vaultTxHash });
-  const { isLoading: isOracleWaiting } = useWaitForTransactionReceipt({ hash: oracleTxHash });
-
-  const isPending = isVaultPending || isOraclePending || isVaultWaiting || isOracleWaiting;
-
+  const [tokenAddress, setTokenAddress] = useState("");
+  const [feedAddress, setFeedAddress] = useState("");
+  const [pending, setPending] = useState(false);
+  const [feedback, setFeedback] = useState("");
+  const { address, chainId } = useAccount();
+  const client = usePublicClient({ chainId: 421614 });
+  const queries = useQueryClient();
+  const { writeContractAsync } = useWriteContract();
+  const { data: owner } = useReadContract({
+    address: c.lendingVault,
+    abi: ownerAbi,
+    functionName: "owner",
+    chainId: 421614,
+  });
+  const locked = useRef(false);
+  const isOwner =
+    !!address &&
+    owner?.toLowerCase() === address.toLowerCase() &&
+    chainId === 421614;
   const handleRegister = async () => {
-    if (!tokenAddress || !feedAddress) return;
+    if (
+      locked.current ||
+      !isOwner ||
+      !client ||
+      !isAddress(tokenAddress) ||
+      !isAddress(feedAddress)
+    )
+      return;
+    locked.current = true;
+    setPending(true);
+    setFeedback("Confirm oracle registration in your wallet.");
     try {
-      // 1. Register on Oracle
-      await writeOracle({
+      const oracleHash = await writeContractAsync({
         address: c.volatilityOracle,
         abi: VOLATILITY_ORACLE_ABI,
-        functionName: 'registerFeed',
-        args: [tokenAddress as `0x${string}`, feedAddress as `0x${string}`],
+        functionName: "registerFeed",
+        args: [tokenAddress, feedAddress],
+        chainId: 421614,
       });
-
-      // 2. Register on Vault
-      await writeVault({
+      if (
+        (await client.waitForTransactionReceipt({ hash: oracleHash }))
+          .status !== "success"
+      )
+        throw new Error("Oracle registration reverted.");
+      setFeedback("Confirm vault registration in your wallet.");
+      const vaultHash = await writeContractAsync({
         address: c.lendingVault,
         abi: LENDING_VAULT_ABI,
-        functionName: 'registerAsset',
-        args: [tokenAddress as `0x${string}`, feedAddress as `0x${string}`],
+        functionName: "registerAsset",
+        args: [tokenAddress, feedAddress],
+        chainId: 421614,
       });
-
-      setTokenAddress('');
-      setFeedAddress('');
-    } catch (err) {
-      console.error(err);
+      if (
+        (await client.waitForTransactionReceipt({ hash: vaultHash })).status !==
+        "success"
+      )
+        throw new Error(
+          "Vault registration reverted. Oracle registration was already confirmed.",
+        );
+      await queries.invalidateQueries();
+      setTokenAddress("");
+      setFeedAddress("");
+      setFeedback("Market registered.");
+    } catch (e) {
+      setFeedback(
+        e instanceof Error
+          ? (e as Error & { shortMessage?: string }).shortMessage || e.message
+          : "Registration failed. Try again.",
+      );
+    } finally {
+      locked.current = false;
+      setPending(false);
     }
   };
-
   return (
-    <div className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-md mt-8">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h2 className="text-lg font-syne font-bold text-white">Admin Console</h2>
-          <p className="text-sm text-white/50">Register new dynamic markets on the fly.</p>
-        </div>
-      </div>
-      
-      <div className="flex flex-col sm:flex-row gap-4 items-end">
-        <div className="flex-1">
-          <label className="block text-xs font-medium text-white/70 mb-1">ERC-20 Token Address</label>
-          <input 
-            type="text" 
-            placeholder="0x..." 
+    <div className="admin-panel">
+      <p>
+        Register a collateral token and its price feed. Requires the protocol
+        owner’s wallet.
+      </p>
+      <div className="admin-form">
+        <label>
+          Collateral token
+          <input
+            placeholder="0x…"
             value={tokenAddress}
             onChange={(e) => setTokenAddress(e.target.value)}
-            className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-white/30"
+            disabled={pending}
           />
-        </div>
-        <div className="flex-1">
-          <label className="block text-xs font-medium text-white/70 mb-1">Chainlink USD Feed Address</label>
-          <input 
-            type="text" 
-            placeholder="0x..." 
+        </label>
+        <label>
+          USD price feed
+          <input
+            placeholder="0x…"
             value={feedAddress}
             onChange={(e) => setFeedAddress(e.target.value)}
-            className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-white/30"
+            disabled={pending}
           />
-        </div>
+        </label>
         <button
-          onClick={handleRegister}
-          disabled={!tokenAddress || !feedAddress || isPending}
-          className="bg-white text-black font-syne font-bold px-6 py-2 h-[42px] rounded-xl hover:bg-white/90 disabled:opacity-50 transition-all whitespace-nowrap"
+          className="btn-secondary"
+          onClick={() => void handleRegister()}
+          disabled={
+            pending ||
+            !isOwner ||
+            !isAddress(tokenAddress) ||
+            !isAddress(feedAddress)
+          }
         >
-          {isPending ? 'Registering...' : '+ Add Market'}
+          {pending ? "Confirming…" : "Register market"}
         </button>
       </div>
+      {feedback && (
+        <p className="demo-feedback" role="status">
+          {feedback}
+        </p>
+      )}
     </div>
   );
 }

@@ -47,3 +47,6 @@ contracts/broadcast/
 
 # sub-directories
 node_modules/
+
+# Compiled demo transaction tests
+.demo-test/

@@ -1,178 +1,250 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { useAccount, useWriteContract, useChainId } from 'wagmi';
-import { parseUnits, formatUnits } from 'viem';
-import { useUserPosition, useAssetRisk } from '../web3/useProtocol';
-import { CONTRACTS, LENDING_VAULT_ABI, ERC20_ABI } from '../web3/contracts';
+import { useState, useRef } from "react";
+import { useAccount, useWriteContract, usePublicClient } from "wagmi";
+import { useQueryClient } from "@tanstack/react-query";
+import { parseUnits, formatUnits, type Hash } from "viem";
+import { LoaderCircle, Plus } from "lucide-react";
+import { useUserPosition } from "../web3/useProtocol";
+import { CONTRACTS, LENDING_VAULT_ABI, ERC20_ABI } from "../web3/contracts";
+import { TokenMark } from "./MarketCard";
 
 interface VaultPanelProps {
   assetAddress: `0x${string}`;
   symbol: string;
   name: string;
 }
+type Tab = "Deposit" | "Borrow" | "Repay" | "Withdraw";
+const c = CONTRACTS[421614];
+const dollars = (v: bigint) =>
+  Number(formatUnits(v, 6)).toLocaleString("en-US", {
+    maximumFractionDigits: 2,
+  });
 
-type Tab = 'Deposit' | 'Borrow' | 'Repay' | 'Withdraw';
-
-export default function VaultPanel({ assetAddress, symbol, name }: VaultPanelProps) {
-  const { address } = useAccount();
-  const chainId = useChainId();
-  const c = CONTRACTS[chainId as keyof typeof CONTRACTS] ?? CONTRACTS[421614];
-  
-  // Hooks for live data
+export default function VaultPanel({
+  assetAddress,
+  symbol,
+  name,
+}: VaultPanelProps) {
+  const { address, isConnected, chainId } = useAccount();
+  const client = usePublicClient({ chainId: 421614 });
   const position = useUserPosition(address, assetAddress);
-  const risk = useAssetRisk(assetAddress);
-
-  // UI State
-  const [activeTab, setActiveTab] = useState<Tab>('Deposit');
-  const [amount, setAmount] = useState('');
+  const queries = useQueryClient();
+  const [activeTab, setActiveTab] = useState<Tab>("Deposit");
+  const [amount, setAmount] = useState("");
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
+  const [status, setStatus] = useState("");
+  const [error, setError] = useState<string>();
   const { writeContractAsync } = useWriteContract();
+  const locked = useRef(false);
+  const ready = isConnected && chainId === 421614;
 
   const handleAction = async () => {
-    if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
-      setError('Enter a valid amount');
-      return;
-    }
-
+    if (locked.current || !ready || !client) return;
+    locked.current = true;
     setPending(true);
-    setError(null);
-
+    setError(undefined);
     try {
-      if (activeTab === 'Deposit') {
-        const value = parseUnits(amount, 18);
-        // 1. Approve
-        await writeContractAsync({
-          address: assetAddress,
+      const value = parseUnits(
+        amount,
+        activeTab === "Borrow" || activeTab === "Repay" ? 6 : 18,
+      );
+      if (value <= 0n) throw new Error("Enter an amount greater than zero.");
+      const confirm = async (hash: Hash) => {
+        const receipt = await client.waitForTransactionReceipt({ hash });
+        if (receipt.status !== "success")
+          throw new Error(
+            "Transaction reverted. Check your amount and try again.",
+          );
+      };
+      if (activeTab === "Deposit" || activeTab === "Repay") {
+        setStatus("Confirm token approval");
+        const hash = await writeContractAsync({
+          address: activeTab === "Deposit" ? assetAddress : c.mockUsdc,
           abi: ERC20_ABI,
-          functionName: 'approve',
+          functionName: "approve",
           args: [c.lendingVault, value],
-          maxFeePerGas: parseUnits('0.5', 9), // 0.1 gwei (Arbitrum base is ~0.05 gwei)
+          chainId: 421614,
         });
-        // 2. Deposit
-        await writeContractAsync({
-          address: c.lendingVault,
-          abi: LENDING_VAULT_ABI,
-          functionName: 'deposit',
-          args: [assetAddress, value],
-          maxFeePerGas: parseUnits('0.5', 9),
-        });
-      } else if (activeTab === 'Borrow') {
-        const value = parseUnits(amount, 6); // USDC has 6 decimals
-        await writeContractAsync({
-          address: c.lendingVault,
-          abi: LENDING_VAULT_ABI,
-          functionName: 'borrow',
-          args: [assetAddress, value],
-          maxFeePerGas: parseUnits('0.5', 9),
-        });
-      } else if (activeTab === 'Repay') {
-        const value = parseUnits(amount, 6);
-        // 1. Approve USDC
-        await writeContractAsync({
-          address: c.mockUsdc,
-          abi: ERC20_ABI,
-          functionName: 'approve',
-          args: [c.lendingVault, value],
-          maxFeePerGas: parseUnits('0.5', 9),
-        });
-        // 2. Repay
-        await writeContractAsync({
-          address: c.lendingVault,
-          abi: LENDING_VAULT_ABI,
-          functionName: 'repay',
-          args: [value],
-          maxFeePerGas: parseUnits('0.5', 9),
-        });
-      } else if (activeTab === 'Withdraw') {
-        const value = parseUnits(amount, 18);
-        await writeContractAsync({
-          address: c.lendingVault,
-          abi: LENDING_VAULT_ABI,
-          functionName: 'withdraw',
-          args: [assetAddress, value],
-          maxFeePerGas: parseUnits('0.5', 9),
-        });
+        setStatus("Waiting for approval");
+        await confirm(hash);
       }
-      setAmount('');
-    } catch (err: any) {
-      setError(err?.shortMessage || err?.message || 'Transaction failed');
+      setStatus(`Confirm ${activeTab.toLowerCase()}`);
+      let hash: Hash;
+      if (activeTab === "Deposit")
+        hash = await writeContractAsync({
+          address: c.lendingVault,
+          abi: LENDING_VAULT_ABI,
+          functionName: "deposit",
+          args: [assetAddress, value],
+          chainId: 421614,
+        });
+      else if (activeTab === "Borrow")
+        hash = await writeContractAsync({
+          address: c.lendingVault,
+          abi: LENDING_VAULT_ABI,
+          functionName: "borrow",
+          args: [assetAddress, value],
+          chainId: 421614,
+        });
+      else if (activeTab === "Repay")
+        hash = await writeContractAsync({
+          address: c.lendingVault,
+          abi: LENDING_VAULT_ABI,
+          functionName: "repay",
+          args: [value],
+          chainId: 421614,
+        });
+      else
+        hash = await writeContractAsync({
+          address: c.lendingVault,
+          abi: LENDING_VAULT_ABI,
+          functionName: "withdraw",
+          args: [assetAddress, value],
+          chainId: 421614,
+        });
+      setStatus("Waiting for confirmation");
+      await confirm(hash);
+      await queries.invalidateQueries();
+      setAmount("");
+      setStatus("Transaction confirmed");
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? (e as Error & { shortMessage?: string }).shortMessage || e.message
+          : "Transaction failed. Try again.",
+      );
+      setStatus("");
     } finally {
+      locked.current = false;
       setPending(false);
     }
   };
-
-  const formattedCollateral = formatUnits(position.collateral, 18);
-  const formattedDebt = formatUnits(position.debt, 6);
-  const formattedMaxBorrow = formatUnits(position.maxBorrowable, 6);
-  
-  // Calculate max borrow (collateral * LTV)
-  // For demo purposes, we will just show the LTV % dynamically mapping to the health factor.
-  const healthClass = position.isHealthy ? 'hf-safe' : 'hf-danger';
-
+  const currency =
+    activeTab === "Borrow" || activeTab === "Repay" ? "USDC" : symbol;
   return (
-    <div className="vault-panel">
+    <div className="vault-panel glass">
       <div className="vault-header">
-        <h3 className="vault-title">{symbol} Vault</h3>
-        <span className="vault-sub">Manage your {name} position</span>
-      </div>
-
-      <div className="vault-stats">
-        <div className="v-stat">
-          <span className="v-label">Deposited</span>
-          <span className="v-val">{Number(formattedCollateral).toFixed(4)} {symbol}</span>
-        </div>
-        <div className="v-stat">
-          <span className="v-label">Borrowed</span>
-          <span className="v-val">${Number(formattedDebt).toFixed(2)} USDC</span>
-        </div>
-        <div className="v-stat">
-          <span className="v-label">Available to Borrow</span>
-          <span className="v-val hf-safe">${Number(formattedMaxBorrow).toFixed(2)} USDC</span>
-        </div>
-        <div className="v-stat">
-          <span className="v-label">Health Factor</span>
-          <span className={`v-val ${healthClass}`}>
-            {position.debt === 0n ? '∞' : position.healthFactorFloat.toFixed(2)}
+        <span className="asset-heading">
+          <TokenMark symbol={symbol} />
+          <span>
+            <h3>{symbol} position</h3>
+            <span className="muted">{name}</span>
           </span>
+        </span>
+        {isConnected && (
+          <span
+            className={`status-chip ${position.isHealthy ? "safe" : "danger"}`}
+          >
+            <span className="status-dot" />
+            {position.isLoading
+              ? "Reading"
+              : position.isHealthy
+                ? "Healthy"
+                : "At risk"}
+          </span>
+        )}
+      </div>
+      <div className="vault-stats">
+        <div>
+          <span className="metric-caption">Deposited</span>
+          <strong>
+            {isConnected
+              ? Number(formatUnits(position.collateral, 18)).toLocaleString(
+                  "en-US",
+                  { maximumFractionDigits: 4 },
+                )
+              : "—"}{" "}
+            <small>{symbol}</small>
+          </strong>
+        </div>
+        <div>
+          <span className="metric-caption">Borrowed</span>
+          <strong>{isConnected ? `$${dollars(position.debt)}` : "—"}</strong>
+        </div>
+        <div>
+          <span className="metric-caption">Available to borrow</span>
+          <strong>
+            {isConnected ? `$${dollars(position.maxBorrowable)}` : "—"}
+          </strong>
+        </div>
+        <div>
+          <span className="metric-caption">Health factor</span>
+          <strong
+            className={!position.isHealthy && isConnected ? "text-danger" : ""}
+          >
+            {!isConnected
+              ? "—"
+              : position.debt === 0n
+                ? "∞"
+                : position.healthFactorFloat.toFixed(2)}
+          </strong>
         </div>
       </div>
-
-      <div className="vault-tabs">
-        {(['Deposit', 'Borrow', 'Repay', 'Withdraw'] as Tab[]).map((tab) => (
+      <div className="vault-tabs" aria-label="Position action">
+        {(["Deposit", "Borrow", "Repay", "Withdraw"] as const).map((tab) => (
           <button
             key={tab}
-            className={`v-tab ${activeTab === tab ? 'v-tab-active' : ''}`}
-            onClick={() => { setActiveTab(tab); setError(null); setAmount(''); }}
+            className={`v-tab ${activeTab === tab ? "v-tab-active" : ""}`}
+            aria-pressed={activeTab === tab}
+            disabled={pending}
+            onClick={() => {
+              setActiveTab(tab);
+              setError(undefined);
+              setAmount("");
+              setStatus("");
+            }}
           >
             {tab}
           </button>
         ))}
       </div>
-
-      <div className="vault-action-area">
-        <div className="v-input-wrapper">
-          <input
-            type="number"
-            className="v-input"
-            placeholder={activeTab === 'Borrow' ? formattedMaxBorrow : "0.00"}
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            disabled={pending}
-          />
-          <span className="v-input-currency">
-            {activeTab === 'Borrow' || activeTab === 'Repay' ? 'USDC' : symbol}
-          </span>
-        </div>
-
-        {error && <div className="v-error">{error}</div>}
-
-        <button className="btn-primary v-submit" onClick={handleAction} disabled={pending || !amount}>
-          {pending ? 'Processing...' : `${activeTab} ${activeTab === 'Borrow' || activeTab === 'Repay' ? 'USDC' : symbol}`}
-        </button>
+      <label className="amount-label" htmlFor={`amount-${assetAddress}`}>
+        {activeTab} amount
+      </label>
+      <div className="v-input-wrapper">
+        <input
+          id={`amount-${assetAddress}`}
+          type="number"
+          inputMode="decimal"
+          min="0"
+          step="any"
+          className="v-input"
+          placeholder="0.00"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          disabled={pending}
+        />
+        <span className="v-input-currency">{currency}</span>
       </div>
+      {error && (
+        <p className="v-error" role="alert">
+          {error}
+        </p>
+      )}
+      <button
+        className="btn-primary v-submit"
+        onClick={() => void handleAction()}
+        disabled={pending || !amount || !ready}
+      >
+        {pending ? (
+          <LoaderCircle className="spin" size={17} />
+        ) : (
+          <Plus size={17} />
+        )}
+        {!isConnected
+          ? "Connect wallet to continue"
+          : chainId !== 421614
+            ? "Switch to Arbitrum Sepolia"
+            : pending
+              ? status
+              : `${activeTab} ${currency}`}
+      </button>
+      <p className="vault-note" role="status" aria-live="polite">
+        {status && !pending
+          ? status
+          : "Testnet assets only · Each transaction needs wallet confirmation"}
+      </p>
     </div>
   );
 }
