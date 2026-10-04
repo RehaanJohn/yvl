@@ -105,11 +105,9 @@ export function useAssetRisk(assetAddress: `0x${string}` | undefined): AssetVolD
   const ltvBigInt = ltvBps ?? 0n;
   const meta      = BAND_META[Math.min(bandIdx, 2)];
 
-  // annualizedVolBps is WAD-scaled — convert to pct
-  // The oracle returns dailyVol * 15874 / (WAD/100) so units are "bps × 1e18"
-  // To get %, divide by 1e18 and × 100, then ÷ 10000 (bps)
+  // annualizedVolBps is plain basis points (3000 = 30%)
   const volPct = volBigInt > 0n
-    ? `${(Number(formatUnits(volBigInt, 18)) / 100).toFixed(1)}%`
+    ? `${(Number(volBigInt) / 100).toFixed(1)}%`
     : '—';
 
   const ltvPct = ltvBigInt > 0n
@@ -140,6 +138,7 @@ export interface UserPositionData {
   healthFactorFloat: number;
   isHealthy: boolean;
   isLoading: boolean;
+  maxBorrowable: bigint;
 }
 
 export function useUserPosition(
@@ -172,6 +171,14 @@ export function useUserPosition(
     query: { enabled: !!(userAddress && assetAddress), refetchInterval: 15_000 },
   });
 
+  const { data: maxBorrow, isLoading: l4 } = useReadContract({
+    address: c.lendingVault,
+    abi: LENDING_VAULT_ABI,
+    functionName: 'maxBorrowable',
+    args: userAddress && assetAddress ? [userAddress, assetAddress] : undefined,
+    query: { enabled: !!(userAddress && assetAddress), refetchInterval: 15_000 },
+  });
+
   const hfBps   = hf ?? 0n;
   const hfFloat = hfBps >= BigInt(2 ** 200) ? 999 : Number(hfBps) / 10_000;
 
@@ -181,7 +188,8 @@ export function useUserPosition(
     healthFactorBps:  hfBps,
     healthFactorFloat: hfFloat,
     isHealthy:        hfFloat >= 0.95,
-    isLoading:        l1 || l2 || l3,
+    isLoading:        l1 || l2 || l3 || l4,
+    maxBorrowable:    (maxBorrow as bigint) ?? 0n,
   };
 }
 

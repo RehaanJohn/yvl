@@ -3,13 +3,13 @@ import { arbitrumSepolia, arbitrum } from 'wagmi/chains';
 // ─── Contract Addresses (fill after deployment) ───────────────────────────────
 export const CONTRACTS = {
   [arbitrumSepolia.id]: {
-    volatilityOracle: '0xAF0b421d5C681f2C59AFB39dBF85AE85bCa094E0' as `0x${string}`,
-    riskEngine:       '0xEbe17B74fF509d75cC05Ba6E920ECfD0fb54B19A' as `0x${string}`,
-    lendingVault:     '0x762eb42051EFE8B55f92118D2412752AFBecA306' as `0x${string}`,
-    mockUsdc:         '0xe9bf3a4FD2227072D606b60ab6538167172A8E36' as `0x${string}`,
-    wethToken:        '0x39f0F2F34710327A5926979221DB6D946F5DB10f' as `0x${string}`,
-    wbtcToken:        '0xa4184Fdc099203a22244E1832e552801D68a70c2' as `0x${string}`,
-    linkToken:        '0xf192bD6F15dD4449E9ea7880713d327943123F3B' as `0x${string}`,
+    volatilityOracle: '0x6e20E918C7B48BE3CaDCB885fbcf4BA3405f7513' as `0x${string}`,
+    riskEngine:       '0x1A42bFD755Ce8546f8C41f84e3Cf32Ca1FC480B6' as `0x${string}`,
+    lendingVault:     '0x4Cc989b8cAC8177D4B3db0e2635A28dFE5a4e46e' as `0x${string}`,
+    mockUsdc:         '0x28d247fB42721Cc5B9aE6C127728C0DC24eF0Faf' as `0x${string}`,
+    wethToken:        '0x12e02027Dd702f3b31C7b4f7304dbfe04153705f' as `0x${string}`,
+    wbtcToken:        '0x212d7E2Dd4F8A36B1DD2EeB32772a9Aae11410Bd' as `0x${string}`,
+    linkToken:        '0x8DC21E18EF5b79371f25D56512F2A52F9AC1F724' as `0x${string}`,
     // Legacy
     protocol:         '0x0000000000000000000000000000000000000000' as `0x${string}`,
     usdc:             '0x0000000000000000000000000000000000000000' as `0x${string}`,
@@ -90,9 +90,21 @@ export const VOLATILITY_ORACLE_ABI = [
       {"internalType": "uint256","name": "lastPrice","type": "uint256"},
       {"internalType": "uint256","name": "variance","type": "uint256"},
       {"internalType": "uint256","name": "lastUpdated","type": "uint256"},
-      {"internalType": "bool","name": "initialized","type": "bool"}
+      {"internalType": "bool","name": "initialized","type": "bool"},
+      {"internalType": "uint256","name": "lastFeedTime","type": "uint256"}
     ],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"internalType": "address","name": "asset","type": "address"},
+      {"internalType": "uint256[]","name": "prices","type": "uint256[]"},
+      {"internalType": "uint256[]","name": "dts","type": "uint256[]"}
+    ],
+    "name": "seedHistory",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {

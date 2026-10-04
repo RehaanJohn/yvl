@@ -49,6 +49,7 @@ export default function VaultPanel({ assetAddress, symbol, name }: VaultPanelPro
           abi: ERC20_ABI,
           functionName: 'approve',
           args: [c.lendingVault, value],
+          maxFeePerGas: parseUnits('0.5', 9), // 0.1 gwei (Arbitrum base is ~0.05 gwei)
         });
         // 2. Deposit
         await writeContractAsync({
@@ -56,6 +57,7 @@ export default function VaultPanel({ assetAddress, symbol, name }: VaultPanelPro
           abi: LENDING_VAULT_ABI,
           functionName: 'deposit',
           args: [assetAddress, value],
+          maxFeePerGas: parseUnits('0.5', 9),
         });
       } else if (activeTab === 'Borrow') {
         const value = parseUnits(amount, 6); // USDC has 6 decimals
@@ -64,6 +66,7 @@ export default function VaultPanel({ assetAddress, symbol, name }: VaultPanelPro
           abi: LENDING_VAULT_ABI,
           functionName: 'borrow',
           args: [assetAddress, value],
+          maxFeePerGas: parseUnits('0.5', 9),
         });
       } else if (activeTab === 'Repay') {
         const value = parseUnits(amount, 6);
@@ -73,6 +76,7 @@ export default function VaultPanel({ assetAddress, symbol, name }: VaultPanelPro
           abi: ERC20_ABI,
           functionName: 'approve',
           args: [c.lendingVault, value],
+          maxFeePerGas: parseUnits('0.5', 9),
         });
         // 2. Repay
         await writeContractAsync({
@@ -80,6 +84,7 @@ export default function VaultPanel({ assetAddress, symbol, name }: VaultPanelPro
           abi: LENDING_VAULT_ABI,
           functionName: 'repay',
           args: [value],
+          maxFeePerGas: parseUnits('0.5', 9),
         });
       } else if (activeTab === 'Withdraw') {
         const value = parseUnits(amount, 18);
@@ -88,6 +93,7 @@ export default function VaultPanel({ assetAddress, symbol, name }: VaultPanelPro
           abi: LENDING_VAULT_ABI,
           functionName: 'withdraw',
           args: [assetAddress, value],
+          maxFeePerGas: parseUnits('0.5', 9),
         });
       }
       setAmount('');
@@ -100,6 +106,7 @@ export default function VaultPanel({ assetAddress, symbol, name }: VaultPanelPro
 
   const formattedCollateral = formatUnits(position.collateral, 18);
   const formattedDebt = formatUnits(position.debt, 6);
+  const formattedMaxBorrow = formatUnits(position.maxBorrowable, 6);
   
   // Calculate max borrow (collateral * LTV)
   // For demo purposes, we will just show the LTV % dynamically mapping to the health factor.
@@ -115,11 +122,15 @@ export default function VaultPanel({ assetAddress, symbol, name }: VaultPanelPro
       <div className="vault-stats">
         <div className="v-stat">
           <span className="v-label">Deposited</span>
-          <span className="v-val">{Number(formattedCollateral).toFixed(2)} {symbol}</span>
+          <span className="v-val">{Number(formattedCollateral).toFixed(4)} {symbol}</span>
         </div>
         <div className="v-stat">
           <span className="v-label">Borrowed</span>
           <span className="v-val">${Number(formattedDebt).toFixed(2)} USDC</span>
+        </div>
+        <div className="v-stat">
+          <span className="v-label">Available to Borrow</span>
+          <span className="v-val hf-safe">${Number(formattedMaxBorrow).toFixed(2)} USDC</span>
         </div>
         <div className="v-stat">
           <span className="v-label">Health Factor</span>
@@ -146,7 +157,7 @@ export default function VaultPanel({ assetAddress, symbol, name }: VaultPanelPro
           <input
             type="number"
             className="v-input"
-            placeholder="0.00"
+            placeholder={activeTab === 'Borrow' ? formattedMaxBorrow : "0.00"}
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             disabled={pending}

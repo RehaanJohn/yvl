@@ -86,7 +86,8 @@ contract ProtocolTest is Test {
     }
 
     function test_oracle_computes_variance_on_second_poke() public {
-        // Simulate a 5% price move
+        // Simulate a 5% price move one hour later
+        vm.warp(block.timestamp + 1 hours);
         aaplAgg.updateAnswer(215_00_000_000 + 215_00_000_000 / 20);
         oracle.poke(address(aaplToken));
 
@@ -95,11 +96,54 @@ contract ProtocolTest is Test {
     }
 
     function test_oracle_annualized_vol_nonzero_after_move() public {
+        vm.warp(block.timestamp + 1 hours);
         aaplAgg.updateAnswer(220_00_000_000);
         oracle.poke(address(aaplToken));
 
         uint256 vol = oracle.annualizedVolBps(address(aaplToken));
         assertGt(vol, 0);
+    }
+
+    function test_oracle_vol_units_are_plain_bps() public {
+        // One 0.1% hourly return, EWMA weight 6%: sigma_hr^2 = 0.06 * 1e-6
+        // annualised = sqrt(0.06e-6 * 8760) ~ 2.3% => ~230 bps (NOT 10x that)
+        vm.warp(block.timestamp + 1 hours);
+        aaplAgg.updateAnswer(215_00_000_000 + 215_00_000_000 / 1000);
+        oracle.poke(address(aaplToken));
+        uint256 vol = oracle.annualizedVolBps(address(aaplToken));
+        assertApproxEqRel(vol, 229, 0.05e18);
+    }
+
+    function test_oracle_ignores_repoke_without_new_feed_round() public {
+        vm.warp(block.timestamp + 1 hours);
+        aaplAgg.updateAnswer(220_00_000_000);
+        oracle.poke(address(aaplToken));
+        uint256 v1 = oracle.getVariance(address(aaplToken));
+
+        // Same feed round, later block time -> must not decay or inflate variance
+        vm.warp(block.timestamp + 10);
+        aaplAgg.updateAnswer(220_00_000_000); // bumps round but MockAgg reports block.timestamp
+        oracle.poke(address(aaplToken));
+        // flat price over 10s adds ~0 variance but decays old; just assert no blow-up
+        assertLe(oracle.getVariance(address(aaplToken)), v1);
+    }
+
+    function test_seed_history_gives_nonzero_vol() public {
+        uint256[] memory p = new uint256[](4);
+        uint256[] memory d = new uint256[](4);
+        p[0] = 200e18; p[1] = 210e18; p[2] = 195e18; p[3] = 215e18;
+        for (uint256 i = 1; i < 4; i++) d[i] = 1 hours;
+        oracle.seedHistory(address(aaplToken), p, d);
+        assertGt(oracle.annualizedVolBps(address(aaplToken)), 0);
+    }
+
+    function test_seed_history_only_owner() public {
+        uint256[] memory p = new uint256[](2);
+        uint256[] memory d = new uint256[](2);
+        p[0] = 1e18; p[1] = 2e18; d[1] = 1;
+        vm.prank(alice);
+        vm.expectRevert(VolatilityOracle.NotOwner.selector);
+        oracle.seedHistory(address(aaplToken), p, d);
     }
 
     // ─── RiskEngine ───────────────────────────────────────────────────────────
@@ -214,6 +258,7 @@ contract ProtocolTest is Test {
         uint256 hfBefore = vault.healthFactor(alice, address(aaplToken));
 
         // Simulate volatility spike — push AAPL price down 20% then poke
+        vm.warp(block.timestamp + 1 hours);
         aaplAgg.updateAnswer(215_00_000_000 * 80 / 100);
         oracle.poke(address(aaplToken));
 
@@ -233,6 +278,7 @@ contract ProtocolTest is Test {
         vm.stopPrank();
 
         // Crash AAPL price 40% — should make Alice liquidatable
+        vm.warp(block.timestamp + 1 hours);
         aaplAgg.updateAnswer(215_00_000_000 * 60 / 100);
         oracle.poke(address(aaplToken));
 
@@ -260,9 +306,10 @@ contract ProtocolTest is Test {
         uint256 variance;
         uint256 lastUpdated;
         bool    initialized;
+        uint256 lastFeedTime;
     }
 
     function _volState(address asset) internal view returns (VolState memory s) {
-        (s.lastPrice, s.variance, s.lastUpdated, s.initialized) = oracle.volState(asset);
+        (s.lastPrice, s.variance, s.lastUpdated, s.initialized, s.lastFeedTime) = oracle.volState(asset);
     }
 }

@@ -115,7 +115,7 @@ async function pokeAsset(assetAddress) {
         args: [assetAddress],
       });
       console.log(
-        `[keeper] ✓ Asset ${assetAddress} poked | tx: ${hash} | annualizedVol: ${Number(vol) / 1e18 * 100}%`
+        `[keeper] ✓ Asset ${assetAddress} poked | tx: ${hash} | annualizedVol: ${Number(vol) / 100}%`
       );
     } else {
       console.error(`[keeper] ✗ Asset ${assetAddress} poke reverted | tx: ${hash}`);

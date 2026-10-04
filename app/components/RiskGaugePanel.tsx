@@ -67,9 +67,7 @@ function AssetRiskCard({ assetAddress }: { assetAddress: `0x${string}` }) {
   const assetColor = `hsl(${h}, 70%, 65%)`;
 
   // vol % for gauge fill: cap at 80% annualised (extreme) = full gauge
-  const volFloat = risk.annualizedVolBps > 0n
-    ? Number(risk.annualizedVolBps) / 1e18 / 100
-    : 0;
+  const volFloat = Number(risk.annualizedVolBps) / 10_000;
   const gaugePct = Math.min(volFloat / 0.80, 1);
 
   const bandColors = ['#22c55e', '#f59e0b', '#ef4444'];
