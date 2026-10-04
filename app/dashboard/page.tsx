@@ -6,11 +6,7 @@ import VaultPanel from '../components/VaultPanel';
 import AdminPanel from '../components/AdminPanel';
 import { useSupportedAssets, useAssetMetadata } from '../web3/useProtocol';
 
-// Wrapper to fetch symbol/name for the VaultPanel dynamically
-function DynamicVault({ assetAddress }: { assetAddress: `0x${string}` }) {
-  const { symbol, name } = useAssetMetadata(assetAddress);
-  return <VaultPanel assetAddress={assetAddress} symbol={symbol} name={name} />;
-}
+
 
 export default function Dashboard() {
   const { assets, isLoading } = useSupportedAssets();
@@ -63,10 +59,7 @@ export default function Dashboard() {
 
           {/* Right Column: Dynamic Vaults */}
           <div className="flex flex-col gap-8">
-            {isLoading && <p className="text-white/50">Loading Vaults...</p>}
-            {assets.map((assetAddress) => (
-              <DynamicVault key={assetAddress} assetAddress={assetAddress} />
-            ))}
+            {isLoading ? <p className="text-white/50">Loading Vaults...</p> : <VaultPanel assets={assets} />}
           </div>
         </div>
       </main>

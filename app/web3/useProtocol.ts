@@ -139,6 +139,7 @@ export interface UserPositionData {
   isHealthy: boolean;
   isLoading: boolean;
   maxBorrowable: bigint;
+  collateralUsdc: bigint;
 }
 
 export function useUserPosition(
@@ -179,6 +180,14 @@ export function useUserPosition(
     query: { enabled: !!(userAddress && assetAddress), refetchInterval: 15_000 },
   });
 
+  const { data: collatUsdc, isLoading: l5 } = useReadContract({
+    address: c.lendingVault,
+    abi: LENDING_VAULT_ABI,
+    functionName: 'collateralValueUsdc',
+    args: assetAddress && collateralAmt ? [assetAddress, collateralAmt] : undefined,
+    query: { enabled: !!(assetAddress && collateralAmt), refetchInterval: 15_000 },
+  });
+
   const hfBps   = hf ?? 0n;
   const hfFloat = hfBps >= BigInt(2 ** 200) ? 999 : Number(hfBps) / 10_000;
 
@@ -188,8 +197,9 @@ export function useUserPosition(
     healthFactorBps:  hfBps,
     healthFactorFloat: hfFloat,
     isHealthy:        hfFloat >= 0.95,
-    isLoading:        l1 || l2 || l3 || l4,
+    isLoading:        l1 || l2 || l3 || l4 || l5,
     maxBorrowable:    (maxBorrow as bigint) ?? 0n,
+    collateralUsdc:   (collatUsdc as bigint) ?? 0n,
   };
 }
 
@@ -231,5 +241,22 @@ export function useAssetMetadata(assetAddress: `0x${string}` | undefined) {
   return {
     symbol: (symbol as string) || '...',
     name: (name as string) || 'Unknown Asset',
+  };
+}
+
+export function useAssetPrice(assetAddress: `0x${string}` | undefined) {
+  const c = useContracts();
+  const ONE_TOKEN = 1000000000000000000n; // 1e18
+  const { data: price, isLoading } = useReadContract({
+    address: c.lendingVault,
+    abi: LENDING_VAULT_ABI,
+    functionName: 'collateralValueUsdc',
+    args: assetAddress ? [assetAddress, ONE_TOKEN] : undefined,
+    query: { enabled: !!assetAddress, refetchInterval: 60_000 },
+  });
+
+  return {
+    priceUsdc6Decimals: (price as bigint) ?? 0n,
+    isLoading,
   };
 }
